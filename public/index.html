@@ -119,24 +119,26 @@
 <div class="wrap">
   <header>
     <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l4-4v14l-4-4H4z" fill="#fff" stroke="none"/><path d="M15 8.5a5 5 0 0 1 0 7"/><path d="M17.5 6a8.5 8.5 0 0 1 0 12" opacity=".65"/></svg></div>
-    <div class="brand"><h1>SoundStage</h1><p>Contrôleur PC — Monster SoundStage S3</p></div>
-    <div class="pill"><span class="dot" id="dot"></span><span id="status">Recherche…</span></div>
+    <div class="brand"><h1>SoundStage</h1><p data-t="subtitle">Contrôleur PC — Monster SoundStage S3</p></div>
+    <div style="flex:1"></div>
+    <button class="btn ghost" id="btnLang" title="Interface language">EN</button>
+    <div class="pill" style="margin-left:0"><span class="dot" id="dot"></span><span id="status" data-t="searching">Recherche…</span></div>
   </header>
 
   <div class="grid">
     <section class="card">
-      <h2>Enceintes</h2>
-      <div id="list"><div class="empty">Aucune enceinte. Lance une recherche ci-dessous.</div></div>
+      <h2 data-t="speakers">Enceintes</h2>
+      <div id="list"><div class="empty" data-t="noSpeakers">Aucune enceinte. Lance une recherche ci-dessous.</div></div>
       <div class="row" style="margin-top:14px">
-        <button class="btn primary" id="btnScan" data-i="search">Rechercher</button>
-        <input id="manualIp" placeholder="IP manuelle (192.168.1.42)" style="flex:1;min-width:150px" />
-        <button class="btn" id="btnAdd" data-i="plus" title="Ajouter"></button>
+        <button class="btn primary" id="btnScan" data-i="search" data-t="search">Rechercher</button>
+        <input id="manualIp" data-tp="ipPlaceholder" placeholder="IP manuelle (192.168.1.42)" style="flex:1;min-width:150px" />
+        <button class="btn" id="btnAdd" data-i="plus" data-tt="add" title="Ajouter"></button>
       </div>
-      <div class="hint">L'enceinte n'annonce pas en UPnP → scan unicast / IP manuelle recommandé.</div>
+      <div class="hint" data-t="hintDiscovery">L'enceinte n'annonce pas en UPnP → scan unicast / IP manuelle recommandé.</div>
     </section>
 
     <section class="card">
-      <h2>Contrôle</h2>
+      <h2 data-t="control">Contrôle</h2>
       <div class="hero">
         <div class="knob" id="knob">
           <div class="glow"></div>
@@ -148,16 +150,16 @@
               <stop offset="0" stop-color="#ff7a3c"/><stop offset="55%" stop-color="#ff3d7f"/><stop offset="1" stop-color="#8b5cf6"/>
             </linearGradient></defs>
           </svg>
-          <div class="val"><b id="volLabel">--</b><span id="volSub">VOLUME</span></div>
+          <div class="val"><b id="volLabel">--</b><span id="volSub" data-t="volume">VOLUME</span></div>
         </div>
 
         <div class="transport">
-          <button class="tbtn" id="bMute" data-i="mute" title="Mute"></button>
-          <button class="tbtn" id="bPrev" data-i="prev" title="Précédent"></button>
-          <button class="tbtn main" id="bPlay" data-i="play" title="Lecture"></button>
-          <button class="tbtn" id="bPause" data-i="pause" title="Pause"></button>
-          <button class="tbtn" id="bStop" data-i="stop" title="Stop"></button>
-          <button class="tbtn" id="bState" data-i="info" title="État"></button>
+          <button class="tbtn" id="bMute" data-i="mute" data-tt="mute" title="Mute"></button>
+          <button class="tbtn" id="bPrev" data-i="prev" data-tt="prev" title="Précédent"></button>
+          <button class="tbtn main" id="bPlay" data-i="play" data-tt="play" title="Lecture"></button>
+          <button class="tbtn" id="bPause" data-i="pause" data-tt="pause" title="Pause"></button>
+          <button class="tbtn" id="bStop" data-i="stop" data-tt="stop" title="Stop"></button>
+          <button class="tbtn" id="bState" data-i="info" data-tt="state" title="État"></button>
         </div>
 
         <div class="row" style="width:100%;gap:12px;flex-wrap:nowrap">
@@ -169,8 +171,8 @@
         <div class="np" id="np"></div>
 
         <div class="row" style="width:100%">
-          <input id="castUrl" placeholder="Caster un flux / mp3 (https://…)" style="flex:1;min-width:180px" />
-          <button class="btn primary" id="bCast" data-i="cast">Caster</button>
+          <input id="castUrl" data-tp="castPlaceholder" placeholder="Caster un flux / mp3 (https://…)" style="flex:1;min-width:180px" />
+          <button class="btn primary" id="bCast" data-i="cast" data-t="cast">Caster</button>
         </div>
         <div id="dlog" style="width:100%;white-space:pre-wrap;word-break:break-word;color:var(--faint);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-height:120px;overflow:auto"></div>
       </div>
@@ -178,27 +180,27 @@
   </div>
 
   <section class="card" style="margin-top:22px" id="music">
-    <h2>Ma musique (locale)</h2>
+    <h2 data-t="music">Ma musique (locale)</h2>
     <div id="drop" style="border:1.5px dashed var(--card-brd);border-radius:16px;padding:18px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer;transition:.18s">
-      Glisse tes fichiers audio ici, ou <span style="color:var(--txt);text-decoration:underline">parcourir</span>
+      <span id="dropText" data-th="drop">Glisse tes fichiers audio ici, ou <u style="color:var(--txt);text-decoration:underline">parcourir</u></span>
       <input id="file" type="file" accept="audio/*" multiple style="display:none" />
     </div>
     <div class="row" style="margin-top:12px">
-      <button class="btn" id="bPlayAll" data-i="play">Tout lire</button>
-      <button class="btn" id="bPrev2" data-i="prev">Précédent</button>
-      <button class="btn" id="bNext" data-i="next">Suivant</button>
+      <button class="btn" id="bPlayAll" data-i="play" data-t="playAll">Tout lire</button>
+      <button class="btn" id="bPrev2" data-i="prev" data-t="prev">Précédent</button>
+      <button class="btn" id="bNext" data-i="next" data-t="next">Suivant</button>
       <span id="plInfo" class="hint" style="margin-left:auto"></span>
     </div>
     <div id="plist" style="margin-top:10px"></div>
   </section>
 
   <details class="adv">
-    <summary data-i="gear">Avancé — découverte &amp; diagnostics</summary>
+    <summary data-i="gear" data-t="advanced">Avancé — découverte &amp; diagnostics</summary>
     <div class="row">
-      <button class="btn" id="bDiag" data-i="wave">Diagnostic réseau</button>
-      <button class="btn" id="bUnicast" data-i="scan">Scan réseau</button>
-      <button class="btn" id="bDescribe" data-i="file">Describe UPnP</button>
-      <button class="btn" id="bAllplay" data-i="sliders">Chasse AllPlay</button>
+      <button class="btn" id="bDiag" data-i="wave" data-t="diag">Diagnostic réseau</button>
+      <button class="btn" id="bUnicast" data-i="scan" data-t="scanNet">Scan réseau</button>
+      <button class="btn" id="bDescribe" data-i="file" data-t="describe">Describe UPnP</button>
+      <button class="btn" id="bAllplay" data-i="sliders" data-t="allplay">Chasse AllPlay</button>
       <input id="fetchPort" value="2870" style="width:80px" title="port" />
     </div>
     <pre class="diag" id="diag" style="display:none"></pre>
@@ -238,6 +240,62 @@ document.querySelectorAll('[data-i]').forEach(el=>{
   el.insertAdjacentHTML('afterbegin', ico);
 });
 
+// ---------- i18n (EN default / FR) ----------
+let LANG = (localStorage.getItem('ss_lang') || 'en').toLowerCase();
+if (LANG !== 'fr' && LANG !== 'en') LANG = 'en';
+const I18N = {
+  en: {
+    docTitle: 'PC controller',
+    subtitle: 'PC controller — Monster SoundStage S3',
+    volume: 'VOLUME', speakers: 'Speakers',
+    noSpeakers: 'No speaker. Run a search below.',
+    search: 'Search', ipPlaceholder: 'Manual IP (192.168.1.42)', add: 'Add',
+    hintDiscovery: "The speaker doesn't advertise over UPnP → unicast scan / manual IP recommended.",
+    control: 'Control', mute: 'Mute', prev: 'Previous', play: 'Play', pause: 'Pause', stop: 'Stop', state: 'Status',
+    castPlaceholder: 'Cast a stream / mp3 (https://…)', cast: 'Cast',
+    music: 'My music (local)',
+    drop: 'Drag your audio files here, or <u style="color:var(--txt);text-decoration:underline;cursor:pointer">browse</u>',
+    playAll: 'Play all', next: 'Next', noTracks: 'No track yet. Add audio files above.',
+    advanced: 'Advanced — discovery & diagnostics',
+    diag: 'Network diagnostic', scanNet: 'Scan network', describe: 'Describe UPnP', allplay: 'AllPlay hunt',
+    searching: 'Searching…', foundN: '{n} speaker(s) found', nothing: 'Nothing found',
+    noneToast: 'No speaker found (try manual IP)', errSearch: 'Search error',
+    tracks: '{n} track(s)', waiting: 'Waiting', statePfx: 'Status: ', importing: 'Importing {n} file(s)…', added: 'Added',
+  },
+  fr: {
+    docTitle: 'Contrôleur PC',
+    subtitle: 'Contrôleur PC — Monster SoundStage S3',
+    volume: 'VOLUME', speakers: 'Enceintes',
+    noSpeakers: 'Aucune enceinte. Lance une recherche ci-dessous.',
+    search: 'Rechercher', ipPlaceholder: 'IP manuelle (192.168.1.42)', add: 'Ajouter',
+    hintDiscovery: "L'enceinte n'annonce pas en UPnP → scan unicast / IP manuelle recommandé.",
+    control: 'Contrôle', mute: 'Mute', prev: 'Précédent', play: 'Lecture', pause: 'Pause', stop: 'Stop', state: 'État',
+    castPlaceholder: 'Caster un flux / mp3 (https://…)', cast: 'Caster',
+    music: 'Ma musique (locale)',
+    drop: 'Glisse tes fichiers audio ici, ou <u style="color:var(--txt);text-decoration:underline;cursor:pointer">parcourir</u>',
+    playAll: 'Tout lire', next: 'Suivant', noTracks: 'Aucune piste. Ajoute des fichiers audio ci-dessus.',
+    advanced: 'Avancé — découverte & diagnostics',
+    diag: 'Diagnostic réseau', scanNet: 'Scan réseau', describe: 'Describe UPnP', allplay: 'Chasse AllPlay',
+    searching: 'Recherche automatique…', foundN: '{n} enceinte(s) trouvée(s)', nothing: 'Rien trouvé',
+    noneToast: 'Aucune enceinte (essaie l’IP manuelle)', errSearch: 'Erreur recherche',
+    tracks: '{n} piste(s)', waiting: 'En attente', statePfx: 'État : ', importing: 'Import de {n} fichier(s)…', added: 'Ajouté',
+  },
+};
+function t(k){ const d=I18N[LANG]||I18N.en; return (d[k]!==undefined?d[k]:(I18N.en[k]!==undefined?I18N.en[k]:k)); }
+function tn(k,n){ return t(k).replace('{n}', n); }
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-t]').forEach(el=>{ const s=t(el.dataset.t); const svg=el.querySelector('svg'); el.textContent=''; if(svg) el.appendChild(svg); el.appendChild(document.createTextNode(s)); });
+  document.querySelectorAll('[data-th]').forEach(el=>{ el.innerHTML=t(el.dataset.th); });
+  document.querySelectorAll('[data-tp]').forEach(el=>{ el.placeholder=t(el.dataset.tp); });
+  document.querySelectorAll('[data-tt]').forEach(el=>{ el.title=t(el.dataset.tt); });
+  const b=document.getElementById('btnLang'); if(b) b.textContent = LANG.toUpperCase();
+  document.title = 'SoundStage — ' + t('docTitle');
+  render(); plRender();
+}
+function setLang(l){ LANG = (l==='fr'?'fr':'en'); localStorage.setItem('ss_lang', LANG); applyLang(); }
+document.getElementById('btnLang').onclick = ()=> setLang(LANG==='en'?'fr':'en');
+
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2400); }
 function setStatus(t){ $('#status').textContent=t; }
 function connected(on){ $('#dot').classList.toggle('on', !!on); }
@@ -255,7 +313,7 @@ async function cmd(service, action, args, label){
 // ---------- devices ----------
 function render(){
   const l=$('#list');
-  if(!state.devices.length){ l.innerHTML='<div class="empty">Aucune enceinte. Lance une recherche ci-dessous.</div>'; return; }
+  if(!state.devices.length){ l.innerHTML='<div class="empty">'+t('noSpeakers')+'</div>'; return; }
   l.innerHTML = state.devices.map(d=>`
     <div class="dev ${state.sel&&state.sel.ip===d.ip?'sel':''}" data-ip="${d.ip}">
       <div class="ic">${I.speaker}</div>
@@ -271,15 +329,15 @@ async function select(ip){
   await refreshState(); startPolling();
 }
 async function disc(){
-  $('#btnScan').disabled=true; setStatus('Recherche automatique…');
+  $('#btnScan').disabled=true; setStatus(t('searching'));
   try{
     const a=await api('/api/find');
     merge(a.devices||[]); render();
     const n=(a.devices||[]).length;
-    setStatus(n?n+' enceinte(s)':'Rien trouvé');
-    toast(n?`${n} enceinte(s) trouvée(s)`:'Aucune enceinte (essaie l’IP manuelle)');
+    setStatus(n?tn('foundN',n):t('nothing'));
+    toast(n?tn('foundN',n):t('noneToast'));
     if(!state.sel && n) select(a.devices[0].ip);
-  }catch(e){ setStatus('Erreur recherche'); toast('Erreur : '+e.message); }
+  }catch(e){ setStatus(t('errSearch')); toast(t('errSearch')+' : '+e.message); }
   $('#btnScan').disabled=false;
 }
 function merge(found){ const m=new Map(state.devices.map(d=>[d.ip,d])); found.forEach(d=>m.set(d.ip,d)); state.devices=[...m.values()]; }
@@ -324,7 +382,7 @@ async function refreshState(){
 }
 function paintNP(title, st){
   const el=$('#np');
-  if(!title){ el.innerHTML = `<div class="s">${st?('État : '+st):'En attente'}</div>`; return; }
+  if(!title){ el.innerHTML = `<div class="s">${st?(t('statePfx')+st):t('waiting')}</div>`; return; }
   el.innerHTML = `<div class="t">${I.music}<span>${esc(title)}</span></div><div class="s">${st||''}</div>
     <div class="eqbar"><i style="animation-delay:0s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.45s"></i><i style="animation-delay:.6s"></i></div>`;
 }
@@ -408,7 +466,7 @@ $('#bAllplay').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/allplay?ip='+en
 function fmtSize(b){ const u=['o','Ko','Mo','Go']; let i=0; b=b||0; while(b>=1024&&i<3){b/=1024;i++;} return (b<10&&i>0?b.toFixed(1):Math.round(b))+' '+u[i]; }
 function plRender(){
   const el=$('#plist');
-  if(!state.playlist.length){ el.innerHTML='<div class="empty">Aucune piste. Ajoute des fichiers audio ci-dessus.</div>'; $('#plInfo').textContent=''; return; }
+  if(!state.playlist.length){ el.innerHTML='<div class="empty">'+t('noTracks')+'</div>'; $('#plInfo').textContent=''; return; }
   el.innerHTML=state.playlist.map((it,i)=>`
     <div class="track ${i===state.pIndex?'on':''}" data-k="${i}">
       <div class="ic">${I.music}</div>
@@ -417,14 +475,14 @@ function plRender(){
     </div>`).join('');
   el.querySelectorAll('.track').forEach(d=>d.onclick=()=>playAt(+d.dataset.k));
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=(e)=>{e.stopPropagation();delTrack(+b.dataset.del);});
-  $('#plInfo').textContent = (state.pIndex>=0? (state.pIndex+1)+' / '+state.playlist.length : state.playlist.length+' piste(s)');
+  $('#plInfo').textContent = (state.pIndex>=0? (state.pIndex+1)+' / '+state.playlist.length : tn('tracks', state.playlist.length));
 }
 async function loadPlaylist(){ try{ const d=await api('/api/playlist'); state.playlist=d.items||[]; }catch(e){} plRender(); }
 async function upload(files){
   const arr=[...files].filter(f=>f); if(!arr.length) return;
-  toast('Import de '+arr.length+' fichier(s)…');
+  toast(tn('importing', arr.length));
   for(const f of arr){ try{ await fetch('/api/media/'+encodeURIComponent(f.name), {method:'PUT', body:f}); }catch(e){ toast('Échec : '+f.name); } }
-  await loadPlaylist(); toast('Ajouté');
+  await loadPlaylist(); toast(t('added'));
 }
 async function delTrack(i){ const it=state.playlist[i]; if(!it) return; try{ await fetch('/api/media/'+encodeURIComponent(it.name), {method:'DELETE'}); }catch(e){} await loadPlaylist(); }
 async function playAt(i){ const it=state.playlist[i]; if(!it) return; state.pIndex=i; state.userStopped=false; plRender(); await castItem(it); }
@@ -456,6 +514,10 @@ function playAll(){ if(state.playlist.length) playAt(0); else toast('Playlist vi
 
 // ---------- boot ----------
 (function boot(){
+  const q=('&'+location.search+'&'+location.hash).toLowerCase();
+  if(q.includes('lang=fr')||q.includes('&fr')) LANG='fr';
+  if(q.includes('lang=en')||q.includes('&en')) LANG='en';
+  applyLang();
   setRing(0); paintPlay();
   if(location.hash.includes('demo')){
     state.devices=[{ip:'192.168.1.42',name:'SoundStage Salon',services:[1,2,3]}];
