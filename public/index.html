@@ -52,6 +52,9 @@
   .btn:hover{background:rgba(255,255,255,.09);transform:translateY(-1px)}
   .btn.primary{background:var(--grad);border:none;font-weight:650;box-shadow:0 12px 26px rgba(255,61,127,.28)}
   .btn.ghost{background:transparent}
+  .langsel{font:inherit;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--card-brd);color:var(--txt);border-radius:12px;padding:8px 12px;outline:none;cursor:pointer}
+  .langsel:hover{border-color:rgba(255,61,127,.5)}
+  .langsel option{background:var(--bg1);color:var(--txt)}
   .btn:disabled{opacity:.45;cursor:default;transform:none}
   input:not([type=range]){font:inherit;background:rgba(255,255,255,.05);border:1px solid var(--card-brd);color:var(--txt);border-radius:14px;padding:11px 14px;outline:none}
   input:not([type=range]):focus{border-color:rgba(255,61,127,.5)}
@@ -121,7 +124,10 @@
     <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l4-4v14l-4-4H4z" fill="#fff" stroke="none"/><path d="M15 8.5a5 5 0 0 1 0 7"/><path d="M17.5 6a8.5 8.5 0 0 1 0 12" opacity=".65"/></svg></div>
     <div class="brand"><h1>SoundStage</h1><p data-t="subtitle">Contrôleur PC — Monster SoundStage S3</p></div>
     <div style="flex:1"></div>
-    <button class="btn ghost" id="btnLang" title="Interface language">EN</button>
+    <select id="langSel" class="langsel" title="Interface language">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+    </select>
     <div class="pill" style="margin-left:0"><span class="dot" id="dot"></span><span id="status" data-t="searching">Recherche…</span></div>
   </header>
 
@@ -289,12 +295,12 @@ function applyLang(){
   document.querySelectorAll('[data-th]').forEach(el=>{ el.innerHTML=t(el.dataset.th); });
   document.querySelectorAll('[data-tp]').forEach(el=>{ el.placeholder=t(el.dataset.tp); });
   document.querySelectorAll('[data-tt]').forEach(el=>{ el.title=t(el.dataset.tt); });
-  const b=document.getElementById('btnLang'); if(b) b.textContent = LANG.toUpperCase();
+  const s=document.getElementById('langSel'); if(s) s.value = LANG;
   document.title = 'SoundStage — ' + t('docTitle');
   render(); plRender();
 }
 function setLang(l){ LANG = (l==='fr'?'fr':'en'); localStorage.setItem('ss_lang', LANG); applyLang(); }
-document.getElementById('btnLang').onclick = ()=> setLang(LANG==='en'?'fr':'en');
+document.getElementById('langSel').onchange = (e)=> setLang(e.target.value);
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2400); }
 function setStatus(t){ $('#status').textContent=t; }
