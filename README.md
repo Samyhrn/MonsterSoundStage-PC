@@ -10,7 +10,7 @@ A tiny local server + a slick web UI. Volume, playback and stream casting, strai
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-3c873a.svg)](https://nodejs.org)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#)
 
-<img src="docs/screenshots/soundstage-pc-1.1.png" alt="SoundStage PC UI" width="820" />
+<img src="docs/screenshots/soundstage-pc-1.2.png" alt="SoundStage PC UI" width="820" />
 
 </div>
 

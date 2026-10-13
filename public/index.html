@@ -53,8 +53,11 @@
   .btn.primary{background:var(--grad);border:none;font-weight:650;box-shadow:0 12px 26px rgba(255,61,127,.28)}
   .btn.ghost{background:transparent}
   .btn:disabled{opacity:.45;cursor:default;transform:none}
-  input{font:inherit;background:rgba(255,255,255,.05);border:1px solid var(--card-brd);color:var(--txt);border-radius:14px;padding:11px 14px;outline:none}
-  input:focus{border-color:rgba(255,61,127,.5)}
+  input:not([type=range]){font:inherit;background:rgba(255,255,255,.05);border:1px solid var(--card-brd);color:var(--txt);border-radius:14px;padding:11px 14px;outline:none}
+  input:not([type=range]):focus{border-color:rgba(255,61,127,.5)}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:rgba(255,255,255,.13);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:linear-gradient(120deg,var(--a1),var(--a2));cursor:pointer;box-shadow:0 2px 10px rgba(255,61,127,.55)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#ff3d7f;cursor:pointer}
 
   .btn svg{width:18px;height:18px;flex:none}
 
@@ -151,6 +154,12 @@
           <button class="tbtn" id="bState" data-i="info" title="État"></button>
         </div>
 
+        <div class="row" style="width:100%;gap:12px;flex-wrap:nowrap">
+          <span id="tCur" style="color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;width:44px;text-align:right">0:00</span>
+          <input id="seek" type="range" min="0" max="100" value="0" step="1" style="flex:1;min-width:120px" />
+          <span id="tDur" style="color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;width:44px">0:00</span>
+        </div>
+
         <div class="np" id="np"></div>
 
         <div class="row" style="width:100%">
@@ -193,7 +202,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false };
+const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false, pos: 0, dur: 0, seeking: false };
 const PORT = 2870;
 
 /* ---- inline SVG icon set (no emoji fonts needed) ---- */
@@ -313,7 +322,15 @@ function paintNP(title, st){
   el.innerHTML = `<div class="t">${I.music}<span>${esc(title)}</span></div><div class="s">${st||''}</div>
     <div class="eqbar"><i style="animation-delay:0s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.45s"></i><i style="animation-delay:.6s"></i></div>`;
 }
-function startPolling(){ if(state.polling) clearInterval(state.polling); state.polling=setInterval(refreshState, 4000); }
+function startPolling(){ if(state.polling) clearInterval(state.polling); state.polling=setInterval(refreshState, 4000); if(state._pt) clearInterval(state._pt); state._tick=0; state._pt=setInterval(progressTick, 1000); }
+
+// ---------- progress / seek ----------
+function toSec(t){ t=String(t||'').split('.')[0]; const p=t.split(':').map(Number); if(p.length===3) return (p[0]||0)*3600+(p[1]||0)*60+(p[2]||0); if(p.length===2) return (p[0]||0)*60+(p[1]||0); return p[0]||0; }
+function toHMS(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=Math.floor(s%60); return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function renderSeek(){ const r=$('#seek'); if(!r) return; const dur=state.dur||0; r.max=dur>0?dur:100; if(!state.seeking) r.value=Math.min(state.pos,r.max); $('#tCur').textContent=toHMS(state.pos); $('#tDur').textContent=dur>0?toHMS(dur):'--:--'; }
+async function pollPosition(){ if(!state.sel) return; try{ const d=await dlna('AVTransport','GetPositionInfo','<InstanceID>0</InstanceID>'); const b=d.raw||''; const rel=/(?:RelTime>)([^<]*)/.exec(b); const dur=/(?:TrackDuration>)([^<]*)/.exec(b); if(rel) state.pos=toSec(rel[1]); if(dur){ const ds=toSec(dur[1]); if(ds>0) state.dur=ds; } renderSeek(); }catch(e){} }
+async function seekTo(sec){ try{ await cmd('AVTransport','Seek',`<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>${toHMS(sec)}</Target>`,'Seek'); state.pos=sec; renderSeek(); }catch(e){ toast('Seek impossible'); } }
+function progressTick(){ if(!state.playing || state.seeking) return; state._tick=(state._tick||0)+1; if(state._tick%2===1){ pollPosition(); } else if(state.dur>0 && state.pos<state.dur){ state.pos+=1; renderSeek(); } }
 
 async function cast(){
   const url=$('#castUrl').value.trim(); if(!url) return toast('Entre une URL');
@@ -357,6 +374,8 @@ $('#bPause').onclick=()=>transport('Pause');
 $('#bStop').onclick=()=>{ state.userStopped=true; transport('Stop'); };
 $('#bPrev').onclick=()=>transport('Previous');
 $('#bState').onclick=()=>cmd('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>','GetTransportInfo').then(()=>refreshState()).catch(()=>{});
+$('#seek').addEventListener('input',()=>{ state.seeking=true; state.pos=Number($('#seek').value); $('#tCur').textContent=toHMS(state.pos); });
+$('#seek').addEventListener('change',()=>{ state.seeking=false; seekTo(Number($('#seek').value)); });
 $('#bCast').onclick=cast;
 $('#bPlayAll').onclick=playAll;
 $('#bNext').onclick=nextTrack;
@@ -410,7 +429,7 @@ async function castItem(it){
     if(upnpErr(d.raw||'')){ await new Promise(r=>setTimeout(r,900)); d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI'); }
     if(upnpErr(d.raw||'')){ toast('Transport verrouillé (705) — réessaie'); return; }
     await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
-    state.playing=true; state.lastState='PLAYING'; paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
+    state.playing=true; state.lastState='PLAYING'; state.pos=0; state.dur=0; renderSeek(); paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
   }catch(e){ toast('Erreur lecture : '+e.message); }
   finally{ state.casting=false; }
 }
@@ -431,6 +450,7 @@ function playAll(){ if(state.playlist.length) playAt(0); else toast('Playlist vi
       {name:'03 - Lose Yourself to Dance.mp3', size:10455210},
     ];
     state.pIndex=0; plRender();
+    state.pos=42; state.dur=296; renderSeek();
     return;
   }
   const saved=localStorage.getItem('ss_ip');
