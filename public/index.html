@@ -202,7 +202,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false, pos: 0, dur: 0, seeking: false };
+const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false, pos: 0, dur: 0, seeking: false, seekUnsupported: false };
 const PORT = 2870;
 
 /* ---- inline SVG icon set (no emoji fonts needed) ---- */
@@ -327,9 +327,10 @@ function startPolling(){ if(state.polling) clearInterval(state.polling); state.p
 // ---------- progress / seek ----------
 function toSec(t){ t=String(t||'').split('.')[0]; const p=t.split(':').map(Number); if(p.length===3) return (p[0]||0)*3600+(p[1]||0)*60+(p[2]||0); if(p.length===2) return (p[0]||0)*60+(p[1]||0); return p[0]||0; }
 function toHMS(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=Math.floor(s%60); return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
-function renderSeek(){ const r=$('#seek'); if(!r) return; const dur=state.dur||0; r.max=dur>0?dur:100; if(!state.seeking) r.value=Math.min(state.pos,r.max); $('#tCur').textContent=toHMS(state.pos); $('#tDur').textContent=dur>0?toHMS(dur):'--:--'; }
+function toHMSFull(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=Math.floor(s%60); return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function renderSeek(){ const r=$('#seek'); if(!r) return; const dur=state.dur||0; r.disabled=!!state.seekUnsupported; r.max=dur>0?dur:100; if(!state.seeking) r.value=Math.min(state.pos,r.max); $('#tCur').textContent=toHMS(state.pos); $('#tDur').textContent=dur>0?toHMS(dur):'--:--'; }
 async function pollPosition(){ if(!state.sel) return; try{ const d=await dlna('AVTransport','GetPositionInfo','<InstanceID>0</InstanceID>'); const b=d.raw||''; const rel=/(?:RelTime>)([^<]*)/.exec(b); const dur=/(?:TrackDuration>)([^<]*)/.exec(b); if(rel) state.pos=toSec(rel[1]); if(dur){ const ds=toSec(dur[1]); if(ds>0) state.dur=ds; } renderSeek(); }catch(e){} }
-async function seekTo(sec){ try{ await cmd('AVTransport','Seek',`<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>${toHMS(sec)}</Target>`,'Seek'); state.pos=sec; renderSeek(); }catch(e){ toast('Seek impossible'); } }
+async function seekTo(sec){ try{ const d=await cmd('AVTransport','Seek',`<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>${toHMSFull(sec)}</Target>`,'Seek'); if(upnpErr(d.raw||'')){ state.seekUnsupported=true; renderSeek(); toast('Seek non supporté par l’enceinte (firmware)'); await pollPosition(); return; } state.pos=sec; renderSeek(); }catch(e){ state.seekUnsupported=true; renderSeek(); toast('Seek impossible'); } }
 function progressTick(){ if(!state.playing || state.seeking) return; state._tick=(state._tick||0)+1; if(state._tick%2===1){ pollPosition(); } else if(state.dur>0 && state.pos<state.dur){ state.pos+=1; renderSeek(); } }
 
 async function cast(){
