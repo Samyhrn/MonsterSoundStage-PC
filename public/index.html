@@ -193,7 +193,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null };
+const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false };
 const PORT = 2870;
 
 /* ---- inline SVG icon set (no emoji fonts needed) ---- */
@@ -293,7 +293,7 @@ async function refreshState(){
     const t=await dlna('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>');
     const prevState=state.lastState; state.lastState=t.transportState;
     state.playing = t.transportState==='PLAYING'; paintPlay();
-    if(prevState==='PLAYING' && t.transportState==='STOPPED' && !state.userStopped && state.pIndex>=0){ nextTrack(); }
+    if(!state.casting && prevState==='PLAYING' && t.transportState==='STOPPED' && !state.userStopped && state.pIndex>=0){ nextTrack(); }
     const m=await dlna('AVTransport','GetMediaInfo','<InstanceID>0</InstanceID>');
     let title=null, uri=null;
     if(m.raw){
@@ -399,6 +399,7 @@ async function castItem(it){
   const x=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const title=it.name.replace(/\.[^.]+$/,'');
   const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(it.url)}</res></item></DIDL-Lite>`;
+  state.casting=true;
   try{
     // Many DLNA renderers refuse a new URI while the transport is "locked" (UPnP 705)
     // → Stop first, then set the new URI (with one retry).
@@ -409,8 +410,9 @@ async function castItem(it){
     if(upnpErr(d.raw||'')){ await new Promise(r=>setTimeout(r,900)); d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI'); }
     if(upnpErr(d.raw||'')){ toast('Transport verrouillé (705) — réessaie'); return; }
     await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
-    state.playing=true; paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
+    state.playing=true; state.lastState='PLAYING'; paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
   }catch(e){ toast('Erreur lecture : '+e.message); }
+  finally{ state.casting=false; }
 }
 async function nextTrack(){ if(state.pIndex+1 < state.playlist.length) playAt(state.pIndex+1); else toast('Fin de la playlist'); }
 async function prevTrack(){ if(state.pIndex>0) playAt(state.pIndex-1); else toast('Début de la playlist'); }
