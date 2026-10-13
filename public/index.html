@@ -400,8 +400,14 @@ async function castItem(it){
   const title=it.name.replace(/\.[^.]+$/,'');
   const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(it.url)}</res></item></DIDL-Lite>`;
   try{
-    const d=await cmd('AVTransport','SetAVTransportURI',`<InstanceID>0</InstanceID><CurrentURI>${x(it.url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`,'SetURI');
-    if(upnpErr(d.raw||'')){ toast('Refusé par l’enceinte'); return; }
+    // Many DLNA renderers refuse a new URI while the transport is "locked" (UPnP 705)
+    // → Stop first, then set the new URI (with one retry).
+    try{ await dlna('AVTransport','Stop','<InstanceID>0</InstanceID>'); }catch(e){}
+    await new Promise(r=>setTimeout(r,400));
+    const args=`<InstanceID>0</InstanceID><CurrentURI>${x(it.url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`;
+    let d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI');
+    if(upnpErr(d.raw||'')){ await new Promise(r=>setTimeout(r,900)); d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI'); }
+    if(upnpErr(d.raw||'')){ toast('Transport verrouillé (705) — réessaie'); return; }
     await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
     state.playing=true; paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
   }catch(e){ toast('Erreur lecture : '+e.message); }
