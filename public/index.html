@@ -58,6 +58,12 @@
   input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:rgba(255,255,255,.13);outline:none;cursor:pointer}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:linear-gradient(120deg,var(--a1),var(--a2));cursor:pointer;box-shadow:0 2px 10px rgba(255,61,127,.55)}
   input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#ff3d7f;cursor:pointer}
+  .pbar{position:relative;flex:1;min-width:120px;height:8px;border-radius:8px;background:rgba(255,255,255,.13)}
+  .pfill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--grad);border-radius:8px;transition:width .3s linear}
+  .pthumb{position:absolute;top:50%;left:0;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.55);transform:translate(-50%,-50%);display:none}
+  .pbar.seekable{cursor:pointer}
+  .pbar.seekable .pthumb{display:block}
+  .pbar.seekable:hover .pthumb{box-shadow:0 0 0 5px rgba(255,61,127,.25)}
 
   .btn svg{width:18px;height:18px;flex:none}
 
@@ -156,7 +162,7 @@
 
         <div class="row" style="width:100%;gap:12px;flex-wrap:nowrap">
           <span id="tCur" style="color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;width:44px;text-align:right">0:00</span>
-          <input id="seek" type="range" min="0" max="100" value="0" step="1" style="flex:1;min-width:120px" />
+          <div id="bar" class="pbar"><div id="barfill" class="pfill"></div><div id="barthumb" class="pthumb"></div></div>
           <span id="tDur" style="color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;width:44px">0:00</span>
         </div>
 
@@ -202,7 +208,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false, pos: 0, dur: 0, seeking: false, seekUnsupported: false };
+const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null, casting: false, pos: 0, dur: 0, seeking: false, posBase: 0 };
 const PORT = 2870;
 
 /* ---- inline SVG icon set (no emoji fonts needed) ---- */
@@ -328,9 +334,9 @@ function startPolling(){ if(state.polling) clearInterval(state.polling); state.p
 function toSec(t){ t=String(t||'').split('.')[0]; const p=t.split(':').map(Number); if(p.length===3) return (p[0]||0)*3600+(p[1]||0)*60+(p[2]||0); if(p.length===2) return (p[0]||0)*60+(p[1]||0); return p[0]||0; }
 function toHMS(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=Math.floor(s%60); return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
 function toHMSFull(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=Math.floor(s%60); return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
-function renderSeek(){ const r=$('#seek'); if(!r) return; const dur=state.dur||0; r.disabled=!!state.seekUnsupported; r.max=dur>0?dur:100; if(!state.seeking) r.value=Math.min(state.pos,r.max); $('#tCur').textContent=toHMS(state.pos); $('#tDur').textContent=dur>0?toHMS(dur):'--:--'; }
-async function pollPosition(){ if(!state.sel) return; try{ const d=await dlna('AVTransport','GetPositionInfo','<InstanceID>0</InstanceID>'); const b=d.raw||''; const rel=/(?:RelTime>)([^<]*)/.exec(b); const dur=/(?:TrackDuration>)([^<]*)/.exec(b); if(rel) state.pos=toSec(rel[1]); if(dur){ const ds=toSec(dur[1]); if(ds>0) state.dur=ds; } renderSeek(); }catch(e){} }
-async function seekTo(sec){ try{ const d=await cmd('AVTransport','Seek',`<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>${toHMSFull(sec)}</Target>`,'Seek'); if(upnpErr(d.raw||'')){ state.seekUnsupported=true; renderSeek(); toast('Seek non supporté par l’enceinte (firmware)'); await pollPosition(); return; } state.pos=sec; renderSeek(); }catch(e){ state.seekUnsupported=true; renderSeek(); toast('Seek impossible'); } }
+function renderSeek(){ const bar=$('#bar'), fill=$('#barfill'), th=$('#barthumb'); if(!bar) return; const dur=state.dur||0; const pct=dur>0?Math.max(0,Math.min(100,state.pos/dur*100)):0; fill.style.width=pct+'%'; th.style.left=pct+'%'; bar.classList.toggle('seekable', dur>0); $('#tCur').textContent=toHMS(state.pos); $('#tDur').textContent=dur>0?toHMS(dur):'--:--'; }
+async function pollPosition(){ if(!state.sel) return; try{ const d=await dlna('AVTransport','GetPositionInfo','<InstanceID>0</InstanceID>'); const b=d.raw||''; const rel=/(?:RelTime>)([^<]*)/.exec(b); const ddur=/(?:TrackDuration>)([^<]*)/.exec(b); const base=state.posBase||0; if(rel) state.pos=Math.min(state.dur||1e9, base+toSec(rel[1])); if(base===0 && ddur){ const ds=toSec(ddur[1]); if(ds>0) state.dur=ds; } renderSeek(); }catch(e){} }
+async function seekTo(sec){ const it=state.playlist[state.pIndex]; if(!it){ return; } if(!(state.dur>0)){ toast('Durée inconnue — seek indisponible'); return; } sec=Math.max(0,Math.min(state.dur-2, sec)); state.seeking=false; await castItem(it, sec); }
 function progressTick(){ if(!state.playing || state.seeking) return; state._tick=(state._tick||0)+1; if(state._tick%2===1){ pollPosition(); } else if(state.dur>0 && state.pos<state.dur){ state.pos+=1; renderSeek(); } }
 
 async function cast(){
@@ -375,8 +381,15 @@ $('#bPause').onclick=()=>transport('Pause');
 $('#bStop').onclick=()=>{ state.userStopped=true; transport('Stop'); };
 $('#bPrev').onclick=()=>transport('Previous');
 $('#bState').onclick=()=>cmd('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>','GetTransportInfo').then(()=>refreshState()).catch(()=>{});
-$('#seek').addEventListener('input',()=>{ state.seeking=true; state.pos=Number($('#seek').value); $('#tCur').textContent=toHMS(state.pos); });
-$('#seek').addEventListener('change',()=>{ state.seeking=false; seekTo(Number($('#seek').value)); });
+(function(){
+  const bar=$('#bar'); let drag=false;
+  const ratio=e=>{ const r=bar.getBoundingClientRect(); const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left; return Math.max(0,Math.min(1,x/r.width)); };
+  const down=e=>{ if(!bar.classList.contains('seekable'))return; drag=true; state.seeking=true; state.pos=Math.round((state.dur||0)*ratio(e)); renderSeek(); e.preventDefault(); };
+  const move=e=>{ if(!drag)return; state.pos=Math.round((state.dur||0)*ratio(e)); renderSeek(); e.preventDefault(); };
+  const up=e=>{ if(!drag)return; drag=false; state.seeking=false; seekTo(state.pos); };
+  bar.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  bar.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+})();
 $('#bCast').onclick=cast;
 $('#bPlayAll').onclick=playAll;
 $('#bNext').onclick=nextTrack;
@@ -415,22 +428,25 @@ async function upload(files){
 }
 async function delTrack(i){ const it=state.playlist[i]; if(!it) return; try{ await fetch('/api/media/'+encodeURIComponent(it.name), {method:'DELETE'}); }catch(e){} await loadPlaylist(); }
 async function playAt(i){ const it=state.playlist[i]; if(!it) return; state.pIndex=i; state.userStopped=false; plRender(); await castItem(it); }
-async function castItem(it){
+async function castItem(it, startSec){
   const x=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const title=it.name.replace(/\.[^.]+$/,'');
-  const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(it.url)}</res></item></DIDL-Lite>`;
-  state.casting=true;
+  const sb=Math.max(0, Number(startSec)||0);
+  const off = sb>0 ? Math.max(0, Math.floor((it.size||0)*sb/(state.dur||1))) : 0;
+  const url = it.url + (off>0 ? ('?off='+off+'&t='+Date.now()) : '');
+  const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(url)}</res></item></DIDL-Lite>`;
+  state.casting=true; state.posBase=sb;
   try{
     // Many DLNA renderers refuse a new URI while the transport is "locked" (UPnP 705)
     // → Stop first, then set the new URI (with one retry).
     try{ await dlna('AVTransport','Stop','<InstanceID>0</InstanceID>'); }catch(e){}
     await new Promise(r=>setTimeout(r,400));
-    const args=`<InstanceID>0</InstanceID><CurrentURI>${x(it.url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`;
+    const args=`<InstanceID>0</InstanceID><CurrentURI>${x(url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`;
     let d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI');
     if(upnpErr(d.raw||'')){ await new Promise(r=>setTimeout(r,900)); d=await cmd('AVTransport','SetAVTransportURI',args,'SetURI'); }
     if(upnpErr(d.raw||'')){ toast('Transport verrouillé (705) — réessaie'); return; }
     await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
-    state.playing=true; state.lastState='PLAYING'; state.pos=0; state.dur=0; renderSeek(); paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
+    state.playing=true; state.lastState='PLAYING'; state.pos=sb; if(sb===0) state.dur=0; renderSeek(); paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
   }catch(e){ toast('Erreur lecture : '+e.message); }
   finally{ state.casting=false; }
 }

@@ -881,6 +881,11 @@ const server = http.createServer(async (req, res) => {
       const st = fs.statSync(full);
       const ext = path.extname(full).toLowerCase();
       const type = MIME[ext] || 'application/octet-stream';
+      const off = parseInt(url.searchParams.get('off') || '0', 10);
+      if (off > 0 && off < st.size) {
+        res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': st.size - off });
+        return fs.createReadStream(full, { start: off }).pipe(res);
+      }
       const range = req.headers.range;
       if (range) {
         const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
