@@ -1,0 +1,13 @@
+{
+  "name": "monster-soundstage-pc",
+  "version": "1.0.0",
+  "description": "Zero-dependency web app to control Monster SoundStage S3 (Qualcomm AllPlay) speakers from a PC over DLNA/UPnP — volume, transport and stream casting.",
+  "main": "server.js",
+  "bin": { "soundstage-pc": "server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["monster", "soundstage", "allplay", "dlna", "upnp", "ssdp", "speaker", "control", "pc", "windows"],
+  "engines": { "node": ">=18" },
+  "license": "Unlicense"
+}
