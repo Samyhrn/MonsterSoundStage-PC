@@ -146,6 +146,7 @@
           <input id="castUrl" placeholder="Caster un flux / mp3 (https://…)" style="flex:1;min-width:180px" />
           <button class="btn primary" id="bCast" data-i="cast">Caster</button>
         </div>
+        <div id="dlog" style="width:100%;white-space:pre-wrap;word-break:break-word;color:var(--faint);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-height:120px;overflow:auto"></div>
       </div>
     </section>
   </div>
@@ -200,6 +201,14 @@ function setStatus(t){ $('#status').textContent=t; }
 function connected(on){ $('#dot').classList.toggle('on', !!on); }
 async function api(path, opts){ const r=await fetch(path,opts); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||r.statusText); return j; }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function dlog(m){ const el=document.getElementById('dlog'); if(el) el.textContent=m; }
+function upnpErr(raw){ if(!raw) return null; const c=new RegExp('errorCode>([0-9]+)<').exec(raw); const d=new RegExp('errorDescription>([^<]*)<').exec(raw); if(c) return 'UPnP '+c[1]+(d?(' '+d[1]):''); if(/Fault/.test(raw)) return 'SOAP Fault'; return null; }
+async function cmd(service, action, args, label){
+  try{ const d = await dlna(service, action, args); const e = upnpErr(d.raw||'');
+    dlog(`${label||action}: ${e?('❌ '+e):'✅ ok'}${d.volume!==undefined?(' (volume '+d.volume+')'):''}`);
+    return d;
+  }catch(err){ dlog(`${label||action}: ❌ ${err.message}`); throw err; }
+}
 
 // ---------- devices ----------
 function render(){
@@ -246,7 +255,7 @@ function setRing(v){ const c=2*Math.PI*100; $('#arc').setAttribute('stroke-dasho
 async function getVol(){ try{ const d=await dlna('RenderingControl','GetVolume','<InstanceID>0</InstanceID><Channel>Master</Channel>'); if(d.volume!==undefined){ state.vol=d.volume; setRing(d.volume);} connected(true);}catch(e){ connected(false); } }
 async function setVol(v){ state.vol=v; setRing(v); try{ await dlna('RenderingControl','SetVolume',`<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>${Math.round(v)}</DesiredVolume>`);}catch(e){} }
 async function mute(on){ try{ await dlna('RenderingControl','SetMute',`<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>${on?1:0}</DesiredMute>`); toast(on?'Mute':'Unmute'); }catch(e){toast('Erreur mute');} }
-async function transport(a){ try{ const map={Play:'<InstanceID>0</InstanceID><Speed>1</Speed>',Pause:'<InstanceID>0</InstanceID>',Stop:'<InstanceID>0</InstanceID>',Previous:'<InstanceID>0</InstanceID>'}; await dlna('AVTransport',a,map[a]||'<InstanceID>0</InstanceID>'); if(a==='Play')state.playing=true; if(a==='Pause'||a==='Stop')state.playing=false; paintPlay(); await refreshState(); }catch(e){toast('Erreur '+a);} }
+async function transport(a){ try{ const map={Play:'<InstanceID>0</InstanceID><Speed>1</Speed>',Pause:'<InstanceID>0</InstanceID>',Stop:'<InstanceID>0</InstanceID>',Previous:'<InstanceID>0</InstanceID>'}; await cmd('AVTransport',a,map[a]||'<InstanceID>0</InstanceID>'); if(a==='Play')state.playing=true; if(a==='Pause'||a==='Stop')state.playing=false; paintPlay(); await refreshState(); }catch(e){} }
 function paintPlay(){ $('#bPlay').style.opacity = state.playing?'.55':'1'; }
 
 async function refreshState(){
@@ -278,10 +287,13 @@ function startPolling(){ if(state.polling) clearInterval(state.polling); state.p
 async function cast(){
   const url=$('#castUrl').value.trim(); if(!url) return toast('Entre une URL');
   const x=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>Stream</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res>${x(url)}</res></item></DIDL-Lite>`;
-  try{ await dlna('AVTransport','SetAVTransportURI',`<InstanceID>0</InstanceID><CurrentURI>${x(url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`);
-       await dlna('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>'); toast('Cast lancé'); setTimeout(refreshState,1200); }
-  catch(e){ toast('Erreur cast : '+e.message); }
+  const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>Stream</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(url)}</res></item></DIDL-Lite>`;
+  try{
+    const d=await cmd('AVTransport','SetAVTransportURI',`<InstanceID>0</InstanceID><CurrentURI>${x(url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`,'SetURI');
+    if(upnpErr(d.raw||'')){ toast('Enceinte a refusé l’URI'); return; }
+    await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
+    toast('Cast lancé'); setTimeout(refreshState,1200);
+  }catch(e){ toast('Erreur cast : '+e.message); }
 }
 
 // ---------- knob drag ----------
@@ -307,12 +319,13 @@ function ipOrToast(){ const ip=($('#manualIp').value.trim()|| (state.sel&&state.
 $('#btnScan').onclick=disc;
 $('#btnAdd').onclick=addManual;
 $('#manualIp').addEventListener('keydown',e=>{if(e.key==='Enter')addManual();});
-$('#bMute').onclick=()=>mute(true); $('#bMute').ondblclick=()=>mute(false);
+$('#bMute').onclick=()=>cmd('RenderingControl','SetMute','<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>1</DesiredMute>','Mute').then(()=>toast('Mute')).catch(()=>{});
+$('#bMute').ondblclick=()=>cmd('RenderingControl','SetMute','<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>0</DesiredMute>','Unmute').then(()=>toast('Unmute')).catch(()=>{});
 $('#bPlay').onclick=()=>transport('Play');
 $('#bPause').onclick=()=>transport('Pause');
 $('#bStop').onclick=()=>transport('Stop');
 $('#bPrev').onclick=()=>transport('Previous');
-$('#bState').onclick=refreshState;
+$('#bState').onclick=()=>cmd('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>','GetTransportInfo').then(()=>refreshState()).catch(()=>{});
 $('#bCast').onclick=cast;
 $('#bDiag').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/diagnose?ip='+encodeURIComponent(ip),'Diagnostic');};
 $('#bUnicast').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/probe?ip='+encodeURIComponent(ip),'Probe');};
