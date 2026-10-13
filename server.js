@@ -117,6 +117,10 @@ function lanIP() {
 }
 function mediaUrl(name) { return `http://${lanIP()}:${PORT}/media/${encodeURIComponent(name)}`; }
 
+const META_PATH = path.join(MEDIA_DIR, 'meta.json');
+function loadMeta() { try { const m = JSON.parse(fs.readFileSync(META_PATH, 'utf8')); return { files: {}, order: [], ...(m || {}) }; } catch { return { files: {}, order: [] }; } }
+function saveMeta(m) { try { fs.writeFileSync(META_PATH, JSON.stringify(m)); } catch {} }
+
 // ---------------------------------------------------------------------------
 // UPnP device description
 // ---------------------------------------------------------------------------
@@ -851,15 +855,28 @@ const server = http.createServer(async (req, res) => {
   try {
     if (p === '/api/host') return json(res, 200, { ip: lanIP(), port: PORT });
 
+    if (p === '/api/order' && req.method === 'POST') {
+      const b = await readBody(req);
+      const m = loadMeta();
+      if (Array.isArray(b.names)) m.order = b.names.filter((n) => typeof n === 'string');
+      saveMeta(m);
+      return json(res, 200, { ok: true });
+    }
+
     if (p === '/api/playlist') {
       let files = [];
-      try { files = fs.readdirSync(MEDIA_DIR).filter((f) => !f.startsWith('.') && fs.statSync(path.join(MEDIA_DIR, f)).isFile()); } catch {}
-      return json(res, 200, { items: files.map((f) => ({ name: f, url: mediaUrl(f), size: fs.statSync(path.join(MEDIA_DIR, f)).size })) });
+      try { files = fs.readdirSync(MEDIA_DIR).filter((f) => !f.startsWith('.') && !f.startsWith('meta') && fs.statSync(path.join(MEDIA_DIR, f)).isFile()); } catch {}
+      const m = loadMeta();
+      const ordered = (m.order || []).filter((f) => files.includes(f));
+      const rest = files.filter((f) => !ordered.includes(f));
+      const names = [...ordered, ...rest];
+      return json(res, 200, { items: names.map((f) => { const st = fs.statSync(path.join(MEDIA_DIR, f)); const meta = m.files[f] || {}; return { name: f, url: mediaUrl(f), size: st.size, dur: meta.dur || 0 }; }) });
     }
 
     if (p.startsWith('/api/media/') && req.method === 'DELETE') {
       const name = safeName(decodeURIComponent(p.slice('/api/media/'.length)));
       try { fs.unlinkSync(path.join(MEDIA_DIR, name)); } catch {}
+      const m = loadMeta(); delete m.files[name]; m.order = (m.order || []).filter((n) => n !== name); saveMeta(m);
       return json(res, 200, { ok: true });
     }
 
@@ -869,7 +886,7 @@ const server = http.createServer(async (req, res) => {
       const dest = path.join(MEDIA_DIR, name);
       const ws = fs.createWriteStream(dest);
       req.pipe(ws);
-      ws.on('finish', () => json(res, 200, { ok: true, name, url: mediaUrl(name), size: fs.statSync(dest).size }));
+      ws.on('finish', () => { const sz = fs.statSync(dest).size; const m = loadMeta(); m.files[name] = { size: sz, dur: Number(url.searchParams.get('dur')) || 0 }; saveMeta(m); json(res, 200, { ok: true, name, url: mediaUrl(name), size: sz, dur: m.files[name].dur }); });
       ws.on('error', () => json(res, 500, { error: 'write failed' }));
       return;
     }
