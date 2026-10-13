@@ -14,8 +14,8 @@
     --ok:#43d17a; --sh:0 24px 60px rgba(0,0,0,.5);
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;color:var(--txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,sans-serif;
+  html,body{height:100%;background:#0a0a0f}
+  body{margin:0;color:var(--txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,sans-serif;background-color:#0a0a0f;
     background:
       radial-gradient(1100px 700px at 8% -10%, rgba(255,61,127,.16), transparent 60%),
       radial-gradient(900px 650px at 100% 0%, rgba(139,92,246,.18), transparent 55%),
@@ -109,7 +109,7 @@
       <div id="list"><div class="empty">Aucune enceinte. Lance une recherche ci-dessous.</div></div>
       <div class="row" style="margin-top:14px">
         <button class="btn primary" id="btnScan" data-i="search">Rechercher</button>
-        <input id="manualIp" placeholder="IP manuelle (192.168.1.22)" style="flex:1;min-width:150px" />
+        <input id="manualIp" placeholder="IP manuelle (192.168.1.42)" style="flex:1;min-width:150px" />
         <button class="btn" id="btnAdd" data-i="plus" title="Ajouter"></button>
       </div>
       <div class="hint">L'enceinte n'annonce pas en UPnP → scan unicast / IP manuelle recommandé.</div>
@@ -323,7 +323,7 @@ $('#bAllplay').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/allplay?ip='+en
 (function boot(){
   setRing(0); paintPlay();
   if(location.hash.includes('demo')){
-    state.devices=[{ip:'192.168.1.22',name:'Soundstage de Samy et Salomé',services:[1,2,3]}];
+    state.devices=[{ip:'192.168.1.42',name:'SoundStage Salon',services:[1,2,3]}];
     state.sel=state.devices[0]; render(); connected(true); setStatus(state.sel.name);
     state.vol=34; setRing(34); state.playing=true; paintPlay(); paintNP('Daft Punk — Get Lucky','PLAYING');
     return;
