@@ -229,14 +229,16 @@ async function select(ip){
   await refreshState(); startPolling();
 }
 async function disc(){
-  $('#btnScan').disabled=true; setStatus('Recherche…');
-  const found=[];
-  try{ const a=await api('/api/discover'); a.devices.forEach(d=>found.push(d)); }catch(e){}
-  try{ const b=await api('/api/scan'); b.devices.forEach(d=>{ if(!found.some(x=>x.ip===d.ip)) found.push(d); }); }catch(e){}
-  merge(found); render();
-  setStatus(found.length?found.length+' enceinte(s)':'Rien trouvé');
+  $('#btnScan').disabled=true; setStatus('Recherche automatique…');
+  try{
+    const a=await api('/api/find');
+    merge(a.devices||[]); render();
+    const n=(a.devices||[]).length;
+    setStatus(n?n+' enceinte(s)':'Rien trouvé');
+    toast(n?`${n} enceinte(s) trouvée(s)`:'Aucune enceinte (essaie l’IP manuelle)');
+    if(!state.sel && n) select(a.devices[0].ip);
+  }catch(e){ setStatus('Erreur recherche'); toast('Erreur : '+e.message); }
   $('#btnScan').disabled=false;
-  toast(found.length?`${found.length} enceinte(s) trouvée(s)`:'Aucune enceinte (essaie l’IP manuelle)');
 }
 function merge(found){ const m=new Map(state.devices.map(d=>[d.ip,d])); found.forEach(d=>m.set(d.ip,d)); state.devices=[...m.values()]; }
 async function addManual(){

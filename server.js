@@ -746,6 +746,63 @@ async function runAction({ services, service, action, args }) {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-discovery: mDNS (AllPlay / Spotify-Connect / _http) + subnet scan for the DLNA renderer on :2870
+// ---------------------------------------------------------------------------
+async function findSpeakers({ scan = true } = {}) {
+  const cand = new Map();
+  const add = (ip, via, host) => {
+    if (!ip) return;
+    const c = cand.get(ip) || { ip, via: [] };
+    if (!c.via.includes(via)) c.via.push(via);
+    if (host && !c.host) c.host = host;
+    cand.set(ip, c);
+  };
+
+  // 1) mDNS: the speaker advertises _spotify-connect._tcp and _http._tcp
+  try {
+    const m = await mdnsProbe({ timeout: 3000 });
+    const A = m.records.filter((r) => r.type === 1);
+    const SRV = m.records.filter((r) => r.type === 33);
+    const looksSpeaker = (s) => /qualcomm|atheros|soundstage|monster|allplay|cus227/i.test(s || '');
+    for (const a of A) if (typeof a.data === 'string' && looksSpeaker(a.name)) add(a.data, 'mdns', a.name);
+    for (const s of SRV) {
+      const svc = (s.name || '').toLowerCase();
+      if (svc.includes('spotify-connect') || svc.includes('_http')) {
+        const tgt = (s.data && s.data.target) || '';
+        const a = A.find((r) => r.name === tgt);
+        if (a && typeof a.data === 'string') add(a.data, 'mdns-srv', tgt);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 2) subnet scan on port 2870 (the DLNA renderer port)
+  if (scan) {
+    for (const iface of ipv4Interfaces()) {
+      const base = iface.address.split('.').slice(0, 3).join('.');
+      const ips = [];
+      for (let i = 1; i <= 254; i++) { const ip = `${base}.${i}`; if (ip !== iface.address) ips.push(ip); }
+      let idx = 0;
+      const worker = async () => { while (idx < ips.length) { const ip = ips[idx++]; if (await tcpCheck(ip, 2870, 300)) add(ip, 'scan2870'); } };
+      await Promise.all(Array.from({ length: 220 }, worker));
+    }
+  }
+
+  // 3) verify each candidate is a DLNA renderer and read its friendly name
+  const devices = [];
+  for (const c of cand.values()) {
+    try {
+      const r = parseRawResponse(await rawHttpGet(c.ip, 2870, '/dmr.xml', 2500));
+      if (/<root/i.test(r.body) && /<service>/i.test(r.body)) {
+        const d = parseDescription(r.body, `http://${c.ip}:2870/dmr.xml`);
+        devices.push({ ip: c.ip, name: d.name || c.host || `Enceinte ${c.ip}`, location: `http://${c.ip}:2870/dmr.xml`, services: d.services, via: c.via });
+      }
+    } catch { /* skip */ }
+  }
+  devices.sort((a, b) => (b.services.length ? 1 : 0) - (a.services.length ? 1 : 0));
+  return devices;
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server + API
 // ---------------------------------------------------------------------------
 const PUBLIC = path.join(__dirname, 'public');
@@ -767,6 +824,11 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const p = url.pathname;
   try {
+    if (p === '/api/find') {
+      const scan = url.searchParams.get('scan') !== '0';
+      return json(res, 200, { devices: await findSpeakers({ scan }) });
+    }
+
     if (p === '/api/discover') {
       const found = await discover();
       const map = new Map(devices.map((d) => [d.ip, d]));
