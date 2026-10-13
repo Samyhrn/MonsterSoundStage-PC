@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Uploaded local media
+media/
+
 # Logs
 *.log
 

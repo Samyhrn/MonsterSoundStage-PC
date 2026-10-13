@@ -64,7 +64,7 @@
   .knob svg{transform:rotate(-90deg)}
   .knob .val{position:absolute;inset:0;display:grid;place-items:center}
   .knob .val b{font-size:52px;font-weight:800;letter-spacing:-1px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
-  .knob .val span{color:var(--muted);font-size:12px;letter-spacing:.2em;margin-top:6px}
+  .knob .val span{position:absolute;left:0;right:0;bottom:58px;text-align:center;color:var(--muted);font-size:11.5px;letter-spacing:.22em}
   .knob .glow{position:absolute;inset:-16px;border-radius:50%;background:radial-gradient(circle,rgba(255,61,127,.22),transparent 66%);filter:blur(8px);z-index:-1}
 
   .transport{display:flex;gap:14px;align-items:center}
@@ -93,6 +93,17 @@
          border:1px solid var(--card-brd);border-radius:14px;padding:12px 18px;font-size:13.5px;opacity:0;transition:.25s;pointer-events:none;box-shadow:var(--sh);z-index:50}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .hint{color:var(--faint);font-size:12px;margin-top:8px}
+  .track{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;cursor:pointer;border:1px solid transparent;transition:.15s}
+  .track:hover{background:rgba(255,255,255,.04);border-color:var(--card-brd)}
+  .track.on{background:linear-gradient(120deg,rgba(255,122,60,.14),rgba(139,92,246,.14));border-color:rgba(255,61,127,.35)}
+  .track .ic{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);display:grid;place-items:center;flex:none;color:var(--a2)}
+  .track .ic svg{width:16px;height:16px}
+  .track .meta{flex:1;min-width:0}
+  .track .nm{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .track .ip{color:var(--muted);font-size:11.5px}
+  .mini{background:none;border:none;color:var(--muted);cursor:pointer;font:inherit;font-size:14px;padding:6px 8px;border-radius:8px}
+  .mini:hover{background:rgba(255,255,255,.08);color:var(--txt)}
+  #drop.hot{border-color:rgba(255,61,127,.55);background:rgba(255,61,127,.06)}
 </style>
 </head>
 <body>
@@ -151,6 +162,21 @@
     </section>
   </div>
 
+  <section class="card" style="margin-top:22px" id="music">
+    <h2>Ma musique (locale)</h2>
+    <div id="drop" style="border:1.5px dashed var(--card-brd);border-radius:16px;padding:18px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer;transition:.18s">
+      Glisse tes fichiers audio ici, ou <span style="color:var(--txt);text-decoration:underline">parcourir</span>
+      <input id="file" type="file" accept="audio/*" multiple style="display:none" />
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="bPlayAll" data-i="play">Tout lire</button>
+      <button class="btn" id="bPrev2" data-i="prev">Précédent</button>
+      <button class="btn" id="bNext" data-i="next">Suivant</button>
+      <span id="plInfo" class="hint" style="margin-left:auto"></span>
+    </div>
+    <div id="plist" style="margin-top:10px"></div>
+  </section>
+
   <details class="adv">
     <summary data-i="gear">Avancé — découverte &amp; diagnostics</summary>
     <div class="row">
@@ -167,7 +193,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const state = { devices: [], sel: null, vol: 0, playing: false, polling: null };
+const state = { devices: [], sel: null, vol: 0, playing: false, polling: null, playlist: [], pIndex: -1, userStopped: false, lastState: null };
 const PORT = 2870;
 
 /* ---- inline SVG icon set (no emoji fonts needed) ---- */
@@ -180,6 +206,7 @@ const I = {
   pause:  S('<rect x="6" y="5" width="4.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="4.4" height="14" rx="1.2"/>', true),
   stop:   S('<rect x="6" y="6" width="12" height="12" rx="2"/>', true),
   prev:   S('<rect x="6" y="6" width="2.4" height="12" rx="1"/><path d="M19 6l-9 6 9 6z"/>', true),
+  next:   S('<rect x="15.6" y="6" width="2.4" height="12" rx="1"/><path d="M5 6l9 6-9 6z"/>', true),
   mute:   S('<path d="M4 9h3l4-4v14l-4-4H4z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
   info:   S('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.7" r="1.1" fill="currentColor" stroke="none"/>'),
   cast:   S('<path d="M4 8V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H12"/><path d="M4 12.5a5.5 5.5 0 0 1 5.5 5.5"/><path d="M4 16.5a1.5 1.5 0 0 1 1.5 1.5"/><circle cx="4.6" cy="19.4" r="1" fill="currentColor" stroke="none"/>'),
@@ -264,7 +291,9 @@ async function refreshState(){
   if(!state.sel) return;
   try{
     const t=await dlna('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>');
+    const prevState=state.lastState; state.lastState=t.transportState;
     state.playing = t.transportState==='PLAYING'; paintPlay();
+    if(prevState==='PLAYING' && t.transportState==='STOPPED' && !state.userStopped && state.pIndex>=0){ nextTrack(); }
     const m=await dlna('AVTransport','GetMediaInfo','<InstanceID>0</InstanceID>');
     let title=null, uri=null;
     if(m.raw){
@@ -323,16 +352,63 @@ $('#btnAdd').onclick=addManual;
 $('#manualIp').addEventListener('keydown',e=>{if(e.key==='Enter')addManual();});
 $('#bMute').onclick=()=>cmd('RenderingControl','SetMute','<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>1</DesiredMute>','Mute').then(()=>toast('Mute')).catch(()=>{});
 $('#bMute').ondblclick=()=>cmd('RenderingControl','SetMute','<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>0</DesiredMute>','Unmute').then(()=>toast('Unmute')).catch(()=>{});
-$('#bPlay').onclick=()=>transport('Play');
+$('#bPlay').onclick=()=>{ state.userStopped=false; transport('Play'); };
 $('#bPause').onclick=()=>transport('Pause');
-$('#bStop').onclick=()=>transport('Stop');
+$('#bStop').onclick=()=>{ state.userStopped=true; transport('Stop'); };
 $('#bPrev').onclick=()=>transport('Previous');
 $('#bState').onclick=()=>cmd('AVTransport','GetTransportInfo','<InstanceID>0</InstanceID>','GetTransportInfo').then(()=>refreshState()).catch(()=>{});
 $('#bCast').onclick=cast;
+$('#bPlayAll').onclick=playAll;
+$('#bNext').onclick=nextTrack;
+$('#bPrev2').onclick=prevTrack;
+$('#drop').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{ upload(e.target.files); e.target.value=''; };
+['dragover','dragenter'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault(); $('#drop').classList.add('hot');}));
+['dragleave','drop'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault(); $('#drop').classList.remove('hot');}));
+$('#drop').addEventListener('drop',e=>{ if(e.dataTransfer && e.dataTransfer.files) upload(e.dataTransfer.files); });
 $('#bDiag').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/diagnose?ip='+encodeURIComponent(ip),'Diagnostic');};
 $('#bUnicast').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/probe?ip='+encodeURIComponent(ip),'Probe');};
 $('#bDescribe').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/describe?ip='+encodeURIComponent(ip)+'&port='+($('#fetchPort').value||2870),'Describe');};
 $('#bAllplay').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/allplay?ip='+encodeURIComponent(ip),'Chasse AllPlay');};
+
+// ---------- local music / playlist ----------
+function fmtSize(b){ const u=['o','Ko','Mo','Go']; let i=0; b=b||0; while(b>=1024&&i<3){b/=1024;i++;} return (b<10&&i>0?b.toFixed(1):Math.round(b))+' '+u[i]; }
+function plRender(){
+  const el=$('#plist');
+  if(!state.playlist.length){ el.innerHTML='<div class="empty">Aucune piste. Ajoute des fichiers audio ci-dessus.</div>'; $('#plInfo').textContent=''; return; }
+  el.innerHTML=state.playlist.map((it,i)=>`
+    <div class="track ${i===state.pIndex?'on':''}" data-k="${i}">
+      <div class="ic">${I.music}</div>
+      <div class="meta"><div class="nm">${esc(it.name.replace(/\.[^.]+$/,''))}</div>${it.size?('<div class="ip">'+fmtSize(it.size)+'</div>'):''}</div>
+      <button class="mini" data-del="${i}" title="Retirer">&#10005;</button>
+    </div>`).join('');
+  el.querySelectorAll('.track').forEach(d=>d.onclick=()=>playAt(+d.dataset.k));
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=(e)=>{e.stopPropagation();delTrack(+b.dataset.del);});
+  $('#plInfo').textContent = (state.pIndex>=0? (state.pIndex+1)+' / '+state.playlist.length : state.playlist.length+' piste(s)');
+}
+async function loadPlaylist(){ try{ const d=await api('/api/playlist'); state.playlist=d.items||[]; }catch(e){} plRender(); }
+async function upload(files){
+  const arr=[...files].filter(f=>f); if(!arr.length) return;
+  toast('Import de '+arr.length+' fichier(s)…');
+  for(const f of arr){ try{ await fetch('/api/media/'+encodeURIComponent(f.name), {method:'PUT', body:f}); }catch(e){ toast('Échec : '+f.name); } }
+  await loadPlaylist(); toast('Ajouté');
+}
+async function delTrack(i){ const it=state.playlist[i]; if(!it) return; try{ await fetch('/api/media/'+encodeURIComponent(it.name), {method:'DELETE'}); }catch(e){} await loadPlaylist(); }
+async function playAt(i){ const it=state.playlist[i]; if(!it) return; state.pIndex=i; state.userStopped=false; plRender(); await castItem(it); }
+async function castItem(it){
+  const x=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const title=it.name.replace(/\.[^.]+$/,'');
+  const meta=`<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">${x(it.url)}</res></item></DIDL-Lite>`;
+  try{
+    const d=await cmd('AVTransport','SetAVTransportURI',`<InstanceID>0</InstanceID><CurrentURI>${x(it.url)}</CurrentURI><CurrentURIMetaData>${x(meta)}</CurrentURIMetaData>`,'SetURI');
+    if(upnpErr(d.raw||'')){ toast('Refusé par l’enceinte'); return; }
+    await cmd('AVTransport','Play','<InstanceID>0</InstanceID><Speed>1</Speed>','Play');
+    state.playing=true; paintPlay(); paintNP(title,'PLAYING'); setTimeout(refreshState,1500);
+  }catch(e){ toast('Erreur lecture : '+e.message); }
+}
+async function nextTrack(){ if(state.pIndex+1 < state.playlist.length) playAt(state.pIndex+1); else toast('Fin de la playlist'); }
+async function prevTrack(){ if(state.pIndex>0) playAt(state.pIndex-1); else toast('Début de la playlist'); }
+function playAll(){ if(state.playlist.length) playAt(0); else toast('Playlist vide'); }
 
 // ---------- boot ----------
 (function boot(){
@@ -341,10 +417,17 @@ $('#bAllplay').onclick=()=>{const ip=ipOrToast();if(ip)run('/api/allplay?ip='+en
     state.devices=[{ip:'192.168.1.42',name:'SoundStage Salon',services:[1,2,3]}];
     state.sel=state.devices[0]; render(); connected(true); setStatus(state.sel.name);
     state.vol=34; setRing(34); state.playing=true; paintPlay(); paintNP('Daft Punk — Get Lucky','PLAYING');
+    state.playlist=[
+      {name:'01 - Get Lucky.mp3', size:9123456},
+      {name:'02 - Instant Crush.mp3', size:8341277},
+      {name:'03 - Lose Yourself to Dance.mp3', size:10455210},
+    ];
+    state.pIndex=0; plRender();
     return;
   }
   const saved=localStorage.getItem('ss_ip');
   if(saved){ merge([{ip:saved,name:'Enceinte enregistrée'}]); render(); select(saved); }
+  loadPlaylist();
   disc();
 })();
 </script>

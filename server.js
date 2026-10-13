@@ -93,6 +93,31 @@ function ipv4Interfaces() {
 }
 
 // ---------------------------------------------------------------------------
+// Local media library (the PC serves files the speaker can pull via DLNA)
+// ---------------------------------------------------------------------------
+const MEDIA_DIR = path.join(__dirname, 'media');
+try { fs.mkdirSync(MEDIA_DIR, { recursive: true }); } catch {}
+
+const MIME = {
+  '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.flac': 'audio/flac',
+  '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/opus', '.wav': 'audio/wav',
+  '.wma': 'audio/x-ms-wma', '.mp4': 'audio/mp4', '.m4b': 'audio/mp4',
+};
+
+function safeName(n) { return String(n).replace(/[^\w.\- ()]+/g, '_').slice(0, 180); }
+
+function lanIP() {
+  const ifs = ipv4Interfaces();
+  const pick = ifs.find((i) => /^192\.168\./.test(i.address))
+    || ifs.find((i) => /^10\./.test(i.address))
+    || ifs.find((i) => /^172\.(1[6-9]|2\d|3[01])\./.test(i.address))
+    || ifs.find((i) => i.name !== 'tailscale0')
+    || ifs[0];
+  return pick ? pick.address : '127.0.0.1';
+}
+function mediaUrl(name) { return `http://${lanIP()}:${PORT}/media/${encodeURIComponent(name)}`; }
+
+// ---------------------------------------------------------------------------
 // UPnP device description
 // ---------------------------------------------------------------------------
 function parseDescription(xml, location) {
@@ -824,6 +849,56 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const p = url.pathname;
   try {
+    if (p === '/api/host') return json(res, 200, { ip: lanIP(), port: PORT });
+
+    if (p === '/api/playlist') {
+      let files = [];
+      try { files = fs.readdirSync(MEDIA_DIR).filter((f) => !f.startsWith('.') && fs.statSync(path.join(MEDIA_DIR, f)).isFile()); } catch {}
+      return json(res, 200, { items: files.map((f) => ({ name: f, url: mediaUrl(f), size: fs.statSync(path.join(MEDIA_DIR, f)).size })) });
+    }
+
+    if (p.startsWith('/api/media/') && req.method === 'DELETE') {
+      const name = safeName(decodeURIComponent(p.slice('/api/media/'.length)));
+      try { fs.unlinkSync(path.join(MEDIA_DIR, name)); } catch {}
+      return json(res, 200, { ok: true });
+    }
+
+    if (p.startsWith('/api/media/') && req.method === 'PUT') {
+      const name = safeName(decodeURIComponent(p.slice('/api/media/'.length)));
+      if (!name) { res.writeHead(400); return res.end('bad name'); }
+      const dest = path.join(MEDIA_DIR, name);
+      const ws = fs.createWriteStream(dest);
+      req.pipe(ws);
+      ws.on('finish', () => json(res, 200, { ok: true, name, url: mediaUrl(name), size: fs.statSync(dest).size }));
+      ws.on('error', () => json(res, 500, { error: 'write failed' }));
+      return;
+    }
+
+    if (p.startsWith('/media/')) {
+      const name = safeName(decodeURIComponent(p.slice('/media/'.length)));
+      const full = path.join(MEDIA_DIR, name);
+      if (!fs.existsSync(full) || !fs.statSync(full).isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+      const st = fs.statSync(full);
+      const ext = path.extname(full).toLowerCase();
+      const type = MIME[ext] || 'application/octet-stream';
+      const range = req.headers.range;
+      if (range) {
+        const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
+        let start = m[1] ? parseInt(m[1], 10) : 0;
+        let end = m[2] ? parseInt(m[2], 10) : st.size - 1;
+        if (isNaN(start) || start < 0) start = 0;
+        if (isNaN(end) || end >= st.size) end = st.size - 1;
+        if (start > end) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); return res.end(); }
+        res.writeHead(206, {
+          'Content-Type': type, 'Accept-Ranges': 'bytes',
+          'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1,
+        });
+        return fs.createReadStream(full, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': st.size });
+      return fs.createReadStream(full).pipe(res);
+    }
+
     if (p === '/api/find') {
       const scan = url.searchParams.get('scan') !== '0';
       return json(res, 200, { devices: await findSpeakers({ scan }) });
@@ -963,7 +1038,9 @@ const server = http.createServer(async (req, res) => {
 
 const portArg = process.argv.indexOf('--port');
 const PORT = portArg > -1 ? Number(process.argv[portArg + 1]) : 8099;
-server.listen(PORT, () => {
-  console.log(`\n  SoundStage PC -> http://localhost:${PORT}\n`);
+const hostArg = process.argv.indexOf('--host');
+const HOST = hostArg > -1 ? process.argv[hostArg + 1] : '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`\n  SoundStage PC -> http://localhost:${PORT}  (LAN: http://${lanIP()}:${PORT})\n`);
   console.log('  Interfaces:', ipv4Interfaces().map((i) => `${i.name}=${i.address}`).join(', ') || 'none');
 });
